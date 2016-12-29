@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <title>Shizzle2</title>
+    <script type='text/javascript' src='tween.js'></script>
+    <script type='text/javascript' src='steelseries.js'></script>
+    <script src="mqttws31.js" type="text/javascript"></script>   
+
+    <script>
+
+	var thermo;
+        var thermo2;
+	var clock1;
+
+	var wsbroker = "192.168.2.168";  //mqtt websocket enabled broker
+    	var wsport = 1885 // port for above
+      
+	 var client = new Paho.MQTT.Client(wsbroker, wsport,"clientid_" + parseInt(Math.random() * 100, 10));
+
+         client.onConnectionLost = function (responseObject) { 
+             console.log("connection lost: " + responseObject.errorMessage);
+             };
+
+
+	client.onMessageArrived = function (message) {
+               console.log(message.destinationName, ' -- ', message.payloadString);
+	       var re = /192.168.2.150/gi;
+               var msg = message.destinationName;
+	       if ( msg.search(re) != -1 ){
+                   updateOutside(message.payloadString);
+                   return;
+               } 	
+	       
+	       var re = /192.168.2.109/gi;
+               var msg = message.destinationName;
+               if ( msg.search(re) != -1 ){
+                   updateInside(message.payloadString);
+                   return;
+               }    
+
+
+		
+       };
+
+      var options = {
+        timeout: 3,
+	useSSL: true,
+        onSuccess: function () {
+        console.log("mqtt connected");
+
+	client.subscribe('SENSOR/+/TEMPERATURE', {qos: 1});
+
+	message = new Paho.MQTT.Message("1");
+        message.qos = 0;
+        message.destinationName = "inbox";
+        client.send(message);
+      },
+      onFailure: function (message) {
+        console.log("Connection failed: " + message.errorMessage);
+      }
+    };
+  
+
+
+        function init()
+        {            
+	    // Initialzing
+	   
+            thermo = new steelseries.Linear('canvas', {
+                            width: 140,
+                            height: 320,
+                            gaugeType: steelseries.GaugeType.TYPE2,
+                            minValue : 10,
+    			    maxValue : 30,	
+			    titleString: "Inside Temperature °C",
+                            unitString: "°C",
+                            threshold: 22,
+                            lcdVisible: true
+                            });
+	   thermo.setFrameDesign(steelseries.FrameDesign.GLOSSY_METAL);
+      
+           setInterval(function(){ setRandomTemperature(thermo, 20); }, 15000);
+
+
+	   thermo2 = new steelseries.Linear('canvas2', {
+                            width: 140,
+                            height: 320,
+                            gaugeType: steelseries.GaugeType.TYPE2,
+                            minValue : -10,
+                            maxValue : 30,
+                            titleString: "Outside Temperature °C",
+                            unitString: "°C",
+                            thresholdVisible: false,
+                            threshold: 999,
+                            lcdVisible: true
+                            });
+           thermo2.setFrameDesign(steelseries.FrameDesign.GLOSSY_METAL);
+          setInterval(function(){ setRandomTemperature(thermo2, 20); }, 15000);
+
+	   clock1 = new steelseries.Clock('canvasClock1', {
+                            width: 20,
+                            height: 20
+                            });
+	
+	  
+	   client.connect(options);
+
+        }
+
+	function httpGetAsync(theUrl, callback)
+	{
+           var xmlHttp = new XMLHttpRequest();
+           xmlHttp.onreadystatechange = function() { 
+           if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+               callback(xmlHttp.responseText);
+               }
+           xmlHttp.open("GET", theUrl, true); // true for asynchronous 
+           xmlHttp.send(null);
+        }
+
+
+	function setRandomTemperature(gauge, range) 
+	{
+                var ret;	
+		//ret = httpGetAsync("https://cavebase.ddns.net/homeweb/gettemp.php",updateOutside);
+    	}
+
+	function updateOutside(val)
+        {
+            thermo2.setValueAnimated(Number(val));
+        }
+
+        function updateInside(val)
+        {
+            thermo.setValueAnimated(Number(val));
+        }
+
+
+</script>
+</head>
+	<body onload='init()' BGCOLOR="333333" TEXT="cccccc">
+    	<table>
+    		<tr>
+    			<th>	
+    			<canvas id='canvas' width='400' height='400' BGCOLOR="0">
+      			No canvas in your browser...sorry...
+    			</canvas>
+    		</th>
+    		<th>
+    			<canvas id='canvasClock1' width='200' height='400' BGCOLOR="0">
+      			No canvas in your browser...sorry...
+    			</canvas>
+    		</th>
+       		<th>
+    			<canvas id='canvas2' width='400' height='400'>
+      			No canvas in your browser...sorry...
+    			</canvas>
+    		</th>
+   
+    		</tr> 
+	</table>
+	</body>
+</html>
+
