@@ -14,14 +14,37 @@ SENSOR/[IP ADDRESS]/TEMPERATURE   with the current temperature in Celcius
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+
+#define DHT22 1
+
+#ifdef DHT22
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+#define DHTPIN            D3         
+#define DHTTYPE           DHT22    
+
+DHT_Unified dht(DHTPIN, DHTTYPE);
+sensor_t sensor;
+
+#endif
+
+
+
 // Update these with values suitable for your network.
 
 const char* ssid = "............";
-const char* password = ".................";
+const char* password = ".............";
 const char* mqtt_server = "sdr";
 int  lasttemp;
+int lasttemp2;
 float currenttemp;
-char clientasciimac[13];
+float currenttemp2;
+int lasthumidity;
+float currenthumidity;
+
+char clientasciimac[20];
 
 #define ONE_WIRE_BUS D4
 OneWire oneWire(ONE_WIRE_BUS);
@@ -42,7 +65,15 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
   sensors.begin();
+  
+#ifdef DHT22  
+  dht.begin();
+  dht.temperature().getSensor(&sensor);
+#endif
+  
   lasttemp=0;
+  lasttemp2=0;
+  lasthumidity=0;
 }
 
 void setup_wifi() {
@@ -66,9 +97,9 @@ void setup_wifi() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   WiFi.macAddress(mac);
-  sprintf(clientasciimac,"%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
- 
-  
+  sprintf(clientasciimac,"%d%d%d%d%d%d",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+  Serial.println(clientasciimac);
+  //sprintf(clientasciimac,"CLIENT009");
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -88,6 +119,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
   ip = WiFi.localIP().toString();
   sprintf(topicStr,"SENSOR/%s/TEMPERATURE",ip.c_str());
   client.publish(topicStr, msg);
+
+#ifdef DHT22
+  dtostrf(currenttemp2, 2, 2,msg);
+  sprintf(topicStr,"SENSOR/%s/TEMPERATURE2",ip.c_str());
+  client.publish(topicStr, msg);
+
+  dtostrf(currenthumidity, 2, 2,msg);
+  sprintf(topicStr,"SENSOR/%s/HUMIDITY",ip.c_str());
+  client.publish(topicStr, msg);
+#endif
+
+  
 }
 
 void reconnect() {
@@ -96,8 +139,13 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
     if (client.connect(clientasciimac)) {
+      delay(200);
       sensors.requestTemperatures();
       currenttemp = sensors.getTempCByIndex(0);
+#ifdef DHT22
+      currenttemp2 = getDHT22Temperature();
+      currenthumidity = getDHT22Humidity();
+#endif      
       Serial.println("connected");
       client.subscribe("inbox");
     } else {
@@ -119,6 +167,34 @@ float round_to_dp( float in_value, int decimal_place )
 }
 
 
+#ifdef DHT22
+
+float getDHT22Temperature()
+{
+  sensors_event_t event;  
+  dht.temperature().getEvent(&event);
+  if (isnan(event.temperature)) {
+    return 0;
+  }
+
+  return event.temperature;
+}
+
+
+float getDHT22Humidity()
+{
+  sensors_event_t event;  
+
+ dht.humidity().getEvent(&event);
+  if (isnan(event.relative_humidity)) {
+    return 0;
+  }
+  
+   return event.relative_humidity;
+}
+
+#endif  
+
 void loop() {
 
   char topic[40];
@@ -126,6 +202,8 @@ void loop() {
  
 
   if (!client.connected()) {
+    Serial.println("Client not connected... trying again");
+    delay(5000);
     reconnect();
   }
   
@@ -144,10 +222,32 @@ void loop() {
        dtostrf(currenttemp, 2, 2,msg);
        Serial.println(msg);
        ip = WiFi.localIP().toString();
-       
        sprintf(topic,"SENSOR/%s/TEMPERATURE",ip.c_str());
        client.publish(topic, msg);
      }
-    
+
+#ifdef DHT22
+    currenttemp2 = getDHT22Temperature();
+    if ((int)(currenttemp2*100) != lasttemp2)
+     {
+       lasttemp2=(int)(currenttemp2*100);
+       dtostrf(currenttemp2, 2, 2,msg);
+       Serial.println(msg);
+       ip = WiFi.localIP().toString();
+       sprintf(topic,"SENSOR/%s/TEMPERATURE2",ip.c_str());
+       client.publish(topic, msg);
+     }
+
+    currenthumidity = getDHT22Humidity();
+    if ((int)(currenthumidity*100) != lasthumidity)
+     {
+       lasthumidity=(int)(currenthumidity*100);
+       dtostrf(currenthumidity, 2, 2,msg);
+       Serial.println(msg);
+       ip = WiFi.localIP().toString();
+       sprintf(topic,"SENSOR/%s/HUMIDITY",ip.c_str());
+       client.publish(topic, msg);
+     }
+#endif    
     }
 }
